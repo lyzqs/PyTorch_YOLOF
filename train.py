@@ -19,13 +19,14 @@ from utils.solver.warmup_schedule import build_warmup
 from models import build_model
 from config import build_config
 
+from torch.utils.tensorboard import SummaryWriter
 
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLOF Detection')
     # basic
     parser.add_argument('--cuda', action='store_true', default=True,
                         help='use cuda.')
-    parser.add_argument('-bs', '--batch_size', default=16, type=int,
+    parser.add_argument('-bs', '--batch_size', default=12, type=int,
                         help='Batch size on single GPU for training')
     parser.add_argument('--schedule', type=str, default='2x',
                         help='training schedule: 1x, 2x, 3x, ...')
@@ -108,11 +109,15 @@ def train():
     # build model & criterion
     model, criterion = build_model(args=args, cfg=cfg, device=device, num_classes=num_classes, trainable=True)
     model = model.to(device).train()
-    resume = True
+    resume = False
+
+    # tensorboard
+    writer = SummaryWriter('runs/yolof')
+
     # resume
     start_epoch = -1
     if resume:
-        path_checkpoint = "/root/autodl-tmp/PyTorch_YOLOF/weights/coco/yolof-r50/yolof-r50_epoch_1_8.69.pth"  # 断点路径
+        path_checkpoint = "./weights/coco/yolof-r50/yolof-r50_epoch_1_8.69.pth"  # 断点路径
         checkpoint = torch.load(path_checkpoint)  # 加载断点
 
         model.load_state_dict(checkpoint['model'])  # 加载模型可学习参数
@@ -215,12 +220,15 @@ def train():
                 cur_lr = [param_group['lr'] for param_group in optimizer.param_groups]
                 cur_lr_dict = {'lr': cur_lr[0], 'lr_bk': cur_lr[1]}
                 # basic infor
+                writer.add_scalar('lr',cur_lr_dict['lr'],ni)
+
                 log = '[Epoch: {}/{}]'.format(epoch + 1, max_epoch)
                 log += ' [Iter: {}/{}]'.format(iter_i, epoch_size)
                 log += ' [lr: {:.6f}][lr_bk: {:.6f}]'.format(cur_lr_dict['lr'], cur_lr_dict['lr_bk'])
                 # loss infor
                 for k in loss_dict_reduced.keys():
                     log += '[{}: {:.2f}]'.format(k, loss_dict_reduced[k])
+                    writer.add_scalar(k, loss_dict_reduced[k], ni)
 
                 # other infor
                 log += ' [time: {:.2f}]'.format(t1 - t0)
