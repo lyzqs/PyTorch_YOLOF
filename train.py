@@ -27,7 +27,7 @@ def parse_args():
                         help='use cuda.')
     parser.add_argument('-bs', '--batch_size', default=16, type=int,
                         help='Batch size on single GPU for training')
-    parser.add_argument('--schedule', type=str, default='1x',
+    parser.add_argument('--schedule', type=str, default='2x',
                         help='training schedule: 1x, 2x, 3x, ...')
     parser.add_argument('--num_workers', default=4, type=int,
                         help='Number of workers used in dataloading')
@@ -35,9 +35,7 @@ def parse_args():
                         help='interval between evaluations')
     parser.add_argument('--grad_clip_norm', default=-1., type=float,
                         help='grad clip.')
-    parser.add_argument('--tfboard', action='store_true', 6
-
-    default=False,
+    parser.add_argument('--tfboard', action='store_true', default=True,
                         help='use tensorboard')
     parser.add_argument('--save_folder', default='weights/', type=str,
                         help='path to save weight')
@@ -53,7 +51,7 @@ def parse_args():
                         help='coco pretrained weight')
 
     # dataset
-    parser.add_argument('--root', default='D:/Downloads/Compressed/PyTorch_YOLOF-main/dataset/',
+    parser.add_argument('--root', default='/root/autodl-tmp/PyTorch_YOLOF/data',
                         help='data root')
     parser.add_argument('-d', '--dataset', default='coco',
                         help='coco, voc, widerface, crowdhuman')
@@ -110,7 +108,18 @@ def train():
     # build model & criterion
     model, criterion = build_model(args=args, cfg=cfg, device=device, num_classes=num_classes, trainable=True)
     model = model.to(device).train()
+    resume = True
+    # resume
+    start_epoch = -1
+    if resume:
+        path_checkpoint = "/root/autodl-tmp/PyTorch_YOLOF/weights/coco/yolof-r50/yolof-r50_epoch_1_8.69.pth"  # 断点路径
+        checkpoint = torch.load(path_checkpoint)  # 加载断点
 
+        model.load_state_dict(checkpoint['model'])  # 加载模型可学习参数
+
+        start_epoch = checkpoint['epoch']  # 设置开始的epoch
+        print("successfully loaded!")
+        model_without_ddp = model
     # DDP
     model_without_ddp = model
     if args.distributed:
@@ -150,7 +159,7 @@ def train():
 
     t0 = time.time()
     # start training loop
-    for epoch in range(max_epoch):
+    for epoch in range(start_epoch + 1, max_epoch):
         if args.distributed:
             dataloader.batch_sampler.sampler.set_epoch(epoch)
 
@@ -161,7 +170,7 @@ def train():
             if ni < cfg['wp_iter'] and warmup:
                 warmup_scheduler.warmup(ni, optimizer)
 
-            elif ni == cfg['wp_iter'] and warmup:
+            elif ni >= cfg['wp_iter'] and warmup:
                 # warmup is over
                 print('Warmup is over')
                 warmup = False
@@ -207,17 +216,17 @@ def train():
                 cur_lr_dict = {'lr': cur_lr[0], 'lr_bk': cur_lr[1]}
                 # basic infor
                 log = '[Epoch: {}/{}]'.format(epoch + 1, max_epoch)
-                log += '[Iter: {}/{}]'.format(iter_i, epoch_size)
-                log += '[lr: {:.6f}][lr_bk: {:.6f}]'.format(cur_lr_dict['lr'], cur_lr_dict['lr_bk'])
+                log += ' [Iter: {}/{}]'.format(iter_i, epoch_size)
+                log += ' [lr: {:.6f}][lr_bk: {:.6f}]'.format(cur_lr_dict['lr'], cur_lr_dict['lr_bk'])
                 # loss infor
                 for k in loss_dict_reduced.keys():
                     log += '[{}: {:.2f}]'.format(k, loss_dict_reduced[k])
 
                 # other infor
-                log += '[time: {:.2f}]'.format(t1 - t0)
-                log += '[gnorm: {:.2f}]'.format(total_norm)
-                log += '[size: [{}, {}]]'.format(cfg['train_min_size'], cfg['train_max_size'])
-
+                log += ' [time: {:.2f}]'.format(t1 - t0)
+                log += ' [gnorm: {:.2f}]'.format(total_norm)
+                log += ' [size: [{}, {}]]'.format(cfg['train_min_size'], cfg['train_max_size'])
+                log += time.strftime(" %Y-%m-%d %H:%M:%S", time.localtime())
                 # print log infor
                 print(log, flush=True)
 
