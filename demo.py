@@ -13,7 +13,6 @@ from models import build_model
 from config import build_config
 
 
-
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLOF Demo Detection')
 
@@ -34,15 +33,15 @@ def parse_args():
                         type=float, help='visual threshold')
 
     # model
-    parser.add_argument('-v', '--version', default='yolof50',
+    parser.add_argument('-v', '--version', default='yolof-r50',
                         help='build yolof')
-    parser.add_argument('--weight', default=None, type=str,
+    parser.add_argument('--weight', default='yolof-r50_C5_1x_37.5.pth', type=str,
                         help='Trained state_dict file path to open')
     parser.add_argument('--topk', default=100, type=int,
                         help='NMS threshold')
-    
+
     return parser.parse_args()
-                    
+
 
 def plot_bbox_labels(img, bbox, label, cls_color, test_scale=0.4):
     x1, y1, x2, y2 = bbox
@@ -51,7 +50,7 @@ def plot_bbox_labels(img, bbox, label, cls_color, test_scale=0.4):
     # plot bbox
     cv2.rectangle(img, (x1, y1), (x2, y2), cls_color, 2)
     # plot title bbox
-    cv2.rectangle(img, (x1, y1-t_size[1]), (int(x1 + t_size[0] * test_scale), y1), cls_color, -1)
+    cv2.rectangle(img, (x1, y1 - t_size[1]), (int(x1 + t_size[0] * test_scale), y1), cls_color, -1)
     # put the test on the title bbox
     cv2.putText(img, label, (int(x1), int(y1 - 5)), 0, test_scale, (0, 0, 0), 1, lineType=cv2.LINE_AA)
 
@@ -70,13 +69,13 @@ def visualize(img, bboxes, scores, cls_inds, class_colors, vis_thresh=0.3):
     return img
 
 
-def detect(net, 
-           device, 
-           transform, 
-           vis_thresh, 
-           mode='image', 
-           path_to_img=None, 
-           path_to_vid=None, 
+def detect(net,
+           device,
+           transform,
+           vis_thresh,
+           mode='image',
+           path_to_img=None,
+           path_to_vid=None,
            path_to_save=None):
     # class color
     np.random.seed(0)
@@ -105,16 +104,16 @@ def detect(net,
                 t0 = time.time()
                 bboxes, scores, cls_inds = net(x)
                 t1 = time.time()
-                print("detection time used ", t1-t0, "s")
+                print("detection time used ", t1 - t0, "s")
 
                 # rescale
                 bboxes *= orig_size
                 bboxes[..., [0, 2]] = np.clip(bboxes[..., [0, 2]], a_min=0., a_max=w)
                 bboxes[..., [1, 3]] = np.clip(bboxes[..., [1, 3]], a_min=0., a_max=h)
 
-                frame_processed = visualize(img=frame, 
+                frame_processed = visualize(img=frame,
                                             bboxes=bboxes,
-                                            scores=scores, 
+                                            scores=scores,
                                             cls_inds=cls_inds,
                                             class_colors=class_colors,
                                             vis_thresh=vis_thresh)
@@ -139,22 +138,22 @@ def detect(net,
             t0 = time.time()
             bboxes, scores, cls_inds = net(x)
             t1 = time.time()
-            print("detection time used ", t1-t0, "s")
+            print("detection time used ", t1 - t0, "s")
 
             # rescale
             bboxes *= orig_size
             bboxes[..., [0, 2]] = np.clip(bboxes[..., [0, 2]], a_min=0., a_max=w)
             bboxes[..., [1, 3]] = np.clip(bboxes[..., [1, 3]], a_min=0., a_max=h)
 
-            img_processed = visualize(img=image, 
+            img_processed = visualize(img=image,
                                       bboxes=bboxes,
-                                      scores=scores, 
+                                      scores=scores,
                                       cls_inds=cls_inds,
                                       class_colors=class_colors,
                                       vis_thresh=vis_thresh)
 
             cv2.imshow('detection', img_processed)
-            cv2.imwrite(os.path.join(save_path, str(i).zfill(6)+'.jpg'), img_processed)
+            cv2.imwrite(os.path.join(save_path, str(i).zfill(6) + '.jpg'), img_processed)
             cv2.waitKey(0)
 
     # ------------------------- Video ---------------------------
@@ -166,9 +165,9 @@ def detect(net,
         fps = 15.0
         out = cv2.VideoWriter(save_path, fourcc, fps, save_size)
 
-        while(True):
+        while (True):
             ret, frame = video.read()
-            
+
             if ret:
                 # ------------------------- Detection ---------------------------
                 h, w, _ = frame.shape
@@ -181,16 +180,16 @@ def detect(net,
                 t0 = time.time()
                 bboxes, scores, cls_inds = net(x)
                 t1 = time.time()
-                print("detection time used ", t1-t0, "s")
+                print("detection time used ", t1 - t0, "s")
 
                 # rescale
                 bboxes *= orig_size
                 bboxes[..., [0, 2]] = np.clip(bboxes[..., [0, 2]], a_min=0., a_max=w)
                 bboxes[..., [1, 3]] = np.clip(bboxes[..., [1, 3]], a_min=0., a_max=h)
 
-                frame_processed = visualize(img=frame, 
+                frame_processed = visualize(img=frame,
                                             bboxes=bboxes,
-                                            scores=scores, 
+                                            scores=scores,
                                             cls_inds=cls_inds,
                                             class_colors=class_colors,
                                             vis_thresh=vis_thresh)
@@ -222,11 +221,12 @@ def run():
     cfg = build_config(args)
 
     # build model
-    model = build_model(args=args, 
+    model = build_model(args=args,
                         cfg=cfg,
-                        device=device, 
-                        num_classes=80, 
-                        trainable=False)
+                        device=device,
+                        num_classes=80,
+                        trainable=False,
+                        pretrained=args.weight)
 
     # load trained weight
     model = load_weight(model=model, path_to_ckpt=args.weight)
@@ -240,18 +240,17 @@ def run():
         pixel_mean=cfg['pixel_mean'],
         pixel_std=cfg['pixel_std'],
         format=cfg['format']
-        )
-
+    )
 
     # run
-    detect(net=model, 
-            device=device,
-            transform=transform,
-            mode=args.mode,
-            path_to_img=args.path_to_img,
-            path_to_vid=args.path_to_vid,
-            path_to_save=args.path_to_save,
-            vis_thresh=args.visual_threshold)
+    detect(net=model,
+           device=device,
+           transform=transform,
+           mode=args.mode,
+           path_to_img=args.path_to_img,
+           path_to_vid=args.path_to_vid,
+           path_to_save=args.path_to_save,
+           vis_thresh=args.visual_threshold)
 
 
 if __name__ == '__main__':
