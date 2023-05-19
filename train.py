@@ -35,7 +35,9 @@ def parse_args():
                         help='interval between evaluations')
     parser.add_argument('--grad_clip_norm', default=-1., type=float,
                         help='grad clip.')
-    parser.add_argument('--tfboard', action='store_true', default=False,
+    parser.add_argument('--tfboard', action='store_true', 6
+
+    default=False,
                         help='use tensorboard')
     parser.add_argument('--save_folder', default='weights/', type=str,
                         help='path to save weight')

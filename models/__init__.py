@@ -1,7 +1,5 @@
 import torch
 from .yolof.build import build_yolof
-from .fcos.build import build_fcos
-from .retinanet.build import build_retinanet
 
 
 # build object detector
