@@ -21,12 +21,24 @@ from config import build_config
 
 from torch.utils.tensorboard import SummaryWriter
 
+
+def search_files(path, filetype):
+    # path：待查找文件的路径
+    # filetype：待查找文件的后缀
+
+    filelist = []
+    for root, subDirs, files in os.walk(path):
+        for fileName in files:
+            if fileName.endswith(filetype):
+                filelist.append(os.path.join(root, fileName))
+    return filelist
+
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLOF Detection')
     # basic
     parser.add_argument('--cuda', action='store_true', default=True,
                         help='use cuda.')
-    parser.add_argument('-bs', '--batch_size', default=12, type=int,
+    parser.add_argument('-bs', '--batch_size', default=16, type=int,
                         help='Batch size on single GPU for training')
     parser.add_argument('--schedule', type=str, default='2x',
                         help='training schedule: 1x, 2x, 3x, ...')
@@ -109,21 +121,40 @@ def train():
     # build model & criterion
     model, criterion = build_model(args=args, cfg=cfg, device=device, num_classes=num_classes, trainable=True)
     model = model.to(device).train()
-    resume = False
 
     # tensorboard
     writer = SummaryWriter('runs/yolof')
 
     # resume
+    dir_path = './weights/coco/yolof-r50'  # 需要查找的目录路径，当前目录为'.'
+    file_suffix = '.pth'  # 需要匹配的后缀名
+    filelist = search_files(dir_path, file_suffix)
+    ap = []
+    print(filelist)
+    for i in range(len(filelist)):
+        ap.append(filelist[i].split("_")[2])
+        print(ap[-1])
+
+    b = 0
+    for i in range(len(ap)):
+        if ap[i] > ap[b]:
+            b = i;
+
+    resume = False
+    if len(filelist):
+        latest = filelist[b]
+        resume = True
+
     start_epoch = -1
+
     if resume:
-        path_checkpoint = "./weights/coco/yolof-r50/yolof-r50_epoch_1_8.69.pth"  # 断点路径
+        path_checkpoint = latest  # 断点路径
         checkpoint = torch.load(path_checkpoint)  # 加载断点
 
         model.load_state_dict(checkpoint['model'])  # 加载模型可学习参数
 
         start_epoch = checkpoint['epoch']  # 设置开始的epoch
-        print("successfully loaded!")
+        print("successfully loaded "+latest+"!")
         model_without_ddp = model
     # DDP
     model_without_ddp = model
@@ -163,12 +194,14 @@ def train():
         dist.barrier()
 
     t0 = time.time()
+
     # start training loop
     for epoch in range(start_epoch + 1, max_epoch):
         if args.distributed:
             dataloader.batch_sampler.sampler.set_epoch(epoch)
 
-            # train one epoch
+        logs = []
+        # train one epoch
         for iter_i, (images, targets, masks) in enumerate(dataloader):
             ni = iter_i + epoch * epoch_size
             # warmup
@@ -220,15 +253,16 @@ def train():
                 cur_lr = [param_group['lr'] for param_group in optimizer.param_groups]
                 cur_lr_dict = {'lr': cur_lr[0], 'lr_bk': cur_lr[1]}
                 # basic infor
-                writer.add_scalar('lr',cur_lr_dict['lr'],ni)
+                logs.append(('lr', cur_lr_dict['lr'], ni, time.time()))
 
                 log = '[Epoch: {}/{}]'.format(epoch + 1, max_epoch)
                 log += ' [Iter: {}/{}]'.format(iter_i, epoch_size)
                 log += ' [lr: {:.6f}][lr_bk: {:.6f}]'.format(cur_lr_dict['lr'], cur_lr_dict['lr_bk'])
                 # loss infor
+
                 for k in loss_dict_reduced.keys():
                     log += '[{}: {:.2f}]'.format(k, loss_dict_reduced[k])
-                    writer.add_scalar(k, loss_dict_reduced[k], ni)
+                    logs.append((k, loss_dict_reduced[k], ni, time.time()))
 
                 # other infor
                 log += ' [time: {:.2f}]'.format(t1 - t0)
@@ -287,6 +321,8 @@ def train():
                 # wait for all processes to synchronize
                 dist.barrier()
 
+        for i, j, k, l in logs:
+            writer.add_scalar(i, j, k, l)
         # close mosaic augmentation
         if cfg['mosaic'] and max_epoch - epoch == 5:
             print('close Mosaic Augmentation ...')

@@ -35,7 +35,7 @@ def parse_args():
     # model
     parser.add_argument('-v', '--version', default='yolof-r50',
                         help='build yolof')
-    parser.add_argument('--weight', default='yolof-r50_C5_1x_37.5.pth', type=str,
+    parser.add_argument('--weight', default='yolof-r50_epoch_8_21.96.pth', type=str,
                         help='Trained state_dict file path to open')
     parser.add_argument('--topk', default=100, type=int,
                         help='NMS threshold')
